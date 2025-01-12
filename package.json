@@ -1,0 +1,16 @@
+{
+  "name": "telegram-bot-worker",
+  "version": "1.0.0",
+  "description": "Telegram 私聊转发机器人 - 基于 Cloudflare Workers",
+  "main": "src/worker.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "author": "YOUR_NAME",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+} 
