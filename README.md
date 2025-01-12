@@ -28,10 +28,10 @@
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/misak10/telegram-bot-worker)
 
 2. 在 Cloudflare Workers 设置以下环境变量：
-   - `BOT_TOKEN`: Telegram 机器人的 token
-   - `BOT_SECRET`: Webhook 的密钥（可选，建议设置）
-   - `ADMIN_UID`: 管理员的 Telegram ID
-   - `GROUP_ID`: 目标群组的 ID（需要是超级群组）
+   - `ENV_BOT_TOKEN`: Telegram 机器人的 token
+   - `ENV_BOT_SECRET`: Webhook 的密钥（可选，建议设置）
+   - `ENV_ADMIN_UID`: 管理员的 Telegram ID
+   - `ENV_GROUP_ID`: 目标群组的 ID（需要是超级群组）
 
 3. 访问 `https://你的域名/registerWebhook` 来设置 Webhook
 
