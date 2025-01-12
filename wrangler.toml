@@ -9,7 +9,7 @@ kv_namespaces = [
 
 [vars]
 # 这些变量会在部署时从环境变量中读取
-# BOT_TOKEN = ""
-# BOT_SECRET = ""
-# ADMIN_UID = ""
-# GROUP_ID = "" 
+# ENV_BOT_TOKEN = ""
+# ENV_BOT_SECRET = ""
+# ENV_ADMIN_UID = ""
+# ENV_GROUP_ID = "" 
