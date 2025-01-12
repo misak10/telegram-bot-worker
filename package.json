@@ -8,8 +8,7 @@
     "deploy": "wrangler deploy",
     "tail": "wrangler tail"
   },
-  "author": "YOUR_NAME",
-  "license": "MIT",
+  "author": "misaki",
   "devDependencies": {
     "wrangler": "^3.0.0"
   }
