@@ -1,8 +1,8 @@
-const TOKEN = BOT_TOKEN
+const TOKEN = ENV_BOT_TOKEN
 const WEBHOOK = '/webhook'
-const SECRET = BOT_SECRET
-const ADMIN_UID = ADMIN_UID
-const GROUP_ID = GROUP_ID
+const SECRET = ENV_BOT_SECRET
+const ADMIN_UID = ENV_ADMIN_UID
+const GROUP_ID = ENV_GROUP_ID
 
 const commands = {
   admin: [
