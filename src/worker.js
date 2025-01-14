@@ -80,7 +80,7 @@ async function handleWebhook(event) {
 
     await setCommands()
     
-    event.waitUntil(handleUpdate(update))
+    await handleUpdate(update)
 
     return new Response('Ok')
   } catch (error) {
@@ -92,23 +92,24 @@ async function handleWebhook(event) {
 async function handleUpdate(update) {
   try {
     if ('message' in update) {
-      await handleMessage(update.message)
+      return await handleMessage(update.message)
     } else if ('callback_query' in update) {
-      await handleCallbackQuery(update.callback_query)
+      return await handleCallbackQuery(update.callback_query)
     }
   } catch (error) {
     console.error('Update handling error:', error)
+    throw error
   }
 }
 
 async function handleMessage(message) {
   if (message.chat.type === 'private') {
     if (message.from.id.toString() === ADMIN_UID && message.text?.startsWith('/')) {
-      return handleAdminCommand(message)
+      return await handleAdminCommand(message)
     }
 
     if (message.from.id.toString() === ADMIN_UID && message.reply_to_message) {
-      return handleAdminReply(message)
+      return await handleAdminReply(message)
     }
 
     const isBlocked = await USER_BLOCKS.get(KV_KEYS.BLOCK(message.from.id))
@@ -118,9 +119,10 @@ async function handleMessage(message) {
     }
 
     if (message.text?.startsWith('/')) {
-      if (message.text === '/start') {
+      const command = message.text.split(' ')[0]
+      if (command === '/start') {
         const idText = `<code>${message.from.id}</code>`
-        await sendMessage(message.from.id, `
+        return await sendMessage(message.from.id, `
 欢迎使用机器人！
 ━━━━━━━━━━━━━━━━
 您的用户ID: ${idText}
@@ -133,86 +135,107 @@ async function handleMessage(message) {
 2. 请保持礼貌友好
 3. 支持发送文字、图片、文件等各种类型的消息
 `)
+      } else if (command === '/help') {
+        return await sendMessage(message.from.id, `
+使用帮助
+━━━━━━━━━━━━━━━━
+1. 直接发送消息即可与管理员对话
+2. 支持发送以下类型消息：
+   - 文字
+   - 图片
+   - 文件
+   - 语音
+   - 视频
+   - 贴纸
+3. 管理员看到消息后会尽快回复
+
+可用命令：
+${commands.guest.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
+`)
       }
       return
     }
 
-    return handlePrivateMessage(message)
+    return await handlePrivateMessage(message)
   } else if (message.chat.id.toString() === GROUP_ID && 
              message.from.id.toString() === ADMIN_UID) {
     if (message.text?.startsWith('/')) {
-      return handleAdminCommand(message, message.message_thread_id)
+      const fullCommand = message.text.split(' ')[0]
+      const command = fullCommand.split('@')[0]
+      const args = message.text.split(' ').slice(1)
+      
+      const processedMessage = {
+        ...message,
+        text: [command, ...args].join(' ')
+      }
+      
+      return await handleAdminCommand(processedMessage, message.message_thread_id)
     } else if (message.message_thread_id) {
-      return handleAdminReply(message)
+      return await handleAdminReply(message)
     }
   }
 }
 
 async function handlePrivateMessage(message) {
   try {
-    let threadId = await USER_TOPICS.get(message.from.id.toString())
+    const userId = message.from.id.toString()
+    let threadId = await USER_TOPICS.get(userId)
+    let needNewTopic = false
 
     if (threadId) {
       try {
-        const forwardResult = await forwardMessage(GROUP_ID, message.chat.id, message.message_id, { 
+        const testMsg = await sendMessage(GROUP_ID, '正在检查话题...', { 
           message_thread_id: threadId 
         })
-        
-        if (forwardResult.ok) {
-          return new Response('OK', { status: 200 })
+        if (!testMsg.ok) {
+          needNewTopic = true
         } else {
-          console.log('Topic not usable, will create new one')
-          threadId = null
-          await USER_TOPICS.delete(message.from.id.toString())
+          await deleteMessage(GROUP_ID, testMsg.result.message_id)
         }
       } catch (error) {
-        if (error.message.includes('message thread not found') || error.message.includes('chat not found')) {
-          console.log('Topic not found, will create new one')
-          threadId = null
-          await USER_TOPICS.delete(message.from.id.toString())
-        } else {
-          console.error('Failed to forward message:', error)
-          throw error
-        }
+        console.log('Topic check failed:', error)
+        needNewTopic = true
       }
+    } else {
+      needNewTopic = true
     }
 
-    if (!threadId) {
+    if (needNewTopic) {
+      await USER_TOPICS.delete(userId)
+      
       const firstName = message.from.first_name || ''
       const lastName = message.from.last_name || ''
       const fullName = [firstName, lastName].filter(Boolean).join(' ') || '未设置姓名'
-      const topicName = `${fullName} (${message.from.id})`
+      const topicName = `${fullName} (${userId})`
       
       const topic = await createForumTopic(GROUP_ID, topicName)
       if (!topic.ok) {
-        console.error('Failed to create forum topic:', topic)
-        return new Response('Failed to create topic', { status: 500 })
+        throw new Error('Failed to create forum topic: ' + JSON.stringify(topic))
       }
-      
-      threadId = topic.result.message_thread_id
-      await USER_TOPICS.put(message.from.id.toString(), threadId)
 
-      const photos = await getUserProfilePhotos(message.from.id)
+      threadId = topic.result.message_thread_id
+      await USER_TOPICS.put(userId, threadId)
 
       const inlineKeyboard = [
         [
           {
             text: '👤 查看用户资料',
-            url: `tg://user?id=${message.from.id}`
+            url: `tg://user?id=${userId}`
           }
         ],
         [
           {
             text: '🚫 屏蔽该用户',
-            callback_data: `block_${message.from.id}`
+            callback_data: `block_${userId}`
           },
           {
             text: '✅ 解除屏蔽',
-            callback_data: `unblock_${message.from.id}`
+            callback_data: `unblock_${userId}`
           }
         ]
       ]
 
+      const photos = await getUserProfilePhotos(userId)
       if (photos.ok && photos.result.total_count > 0) {
         await sendPhoto(GROUP_ID, photos.result.photos[0][0].file_id, {
           message_thread_id: threadId,
@@ -231,16 +254,20 @@ async function handlePrivateMessage(message) {
           }
         })
       }
-
-      await forwardMessage(GROUP_ID, message.chat.id, message.message_id, { 
-        message_thread_id: threadId 
-      })
     }
-    
+
+    const forwardResult = await forwardMessage(GROUP_ID, message.chat.id, message.message_id, { 
+      message_thread_id: threadId 
+    })
+
+    if (!forwardResult.ok) {
+      throw new Error('Failed to forward message: ' + JSON.stringify(forwardResult))
+    }
+
     return new Response('OK', { status: 200 })
   } catch (error) {
     console.error('Error handling private message:', error)
-    return new Response('Internal Server Error', { status: 500 })
+    return new Response('Internal Server Error: ' + error.message, { status: 500 })
   }
 }
 
@@ -511,20 +538,44 @@ async function handleAdminReply(message) {
 
 async function setCommands() {
   try {
+    // 设置管理员命令
     await fetch(`${API_BASE}/setMyCommands`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         commands: commands.admin,
-        scope: { type: 'chat', chat_id: ADMIN_UID }
+        scope: { type: 'chat', chat_id: ADMIN_UID },
+        language_code: 'zh'
       })
     })
 
+    // 设置管理员在群组中的命令
+    await fetch(`${API_BASE}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        commands: commands.admin,
+        scope: { type: 'chat', chat_id: GROUP_ID },
+        language_code: 'zh'
+      })
+    })
+
+    // 设置普通用户命令
     await fetch(`${API_BASE}/setMyCommands`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         commands: commands.guest,
+        scope: { type: 'all_private_chats' },
+        language_code: 'zh'
+      })
+    })
+
+    // 删除其他范围的命令
+    await fetch(`${API_BASE}/deleteMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         scope: { type: 'default' }
       })
     })
@@ -557,8 +608,13 @@ ${commands.admin.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
       case '/block':
         if (args.length > 0) {
           const userId = args[0]
+          const isBlocked = await USER_BLOCKS.get(KV_KEYS.BLOCK(userId))
+          if (isBlocked) {
+            await sendMessage(GROUP_ID, `用户 ${userId} 已经处于屏蔽状态`, threadId ? { message_thread_id: threadId } : {})
+            break
+          }
           await USER_BLOCKS.put(KV_KEYS.BLOCK(userId), 'true')
-          await sendMessage(GROUP_ID, `用户 ${userId} 已被屏蔽`, threadId ? { message_thread_id: threadId } : {})
+          await sendMessage(GROUP_ID, templates.success('用户已被屏蔽', `用户 ${userId} 已被屏蔽`), threadId ? { message_thread_id: threadId } : {})
         } else if (message.reply_to_message) {
           const replyThreadId = message.reply_to_message.message_thread_id
           if (replyThreadId) {
@@ -566,8 +622,13 @@ ${commands.admin.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
             for (const key of list.keys) {
               const value = await USER_TOPICS.get(key.name)
               if (value === replyThreadId.toString()) {
+                const isBlocked = await USER_BLOCKS.get(KV_KEYS.BLOCK(key.name))
+                if (isBlocked) {
+                  await sendMessage(GROUP_ID, `用户 ${key.name} 已经处于屏蔽状态`, threadId ? { message_thread_id: threadId } : {})
+                  break
+                }
                 await USER_BLOCKS.put(KV_KEYS.BLOCK(key.name), 'true')
-                await sendMessage(GROUP_ID, `用户 ${key.name} 已被屏蔽`, threadId ? { message_thread_id: threadId } : {})
+                await sendMessage(GROUP_ID, templates.success('用户已被屏蔽', `用户 ${key.name} 已被屏蔽`), threadId ? { message_thread_id: threadId } : {})
                 break
               }
             }
@@ -580,8 +641,13 @@ ${commands.admin.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
       case '/unblock':
         if (args.length > 0) {
           const userId = args[0]
+          const isBlocked = await USER_BLOCKS.get(KV_KEYS.BLOCK(userId))
+          if (!isBlocked) {
+            await sendMessage(GROUP_ID, `用户 ${userId} 未被屏蔽`, threadId ? { message_thread_id: threadId } : {})
+            break
+          }
           await USER_BLOCKS.delete(KV_KEYS.BLOCK(userId))
-          await sendMessage(GROUP_ID, `用户 ${userId} 已解除屏蔽`, threadId ? { message_thread_id: threadId } : {})
+          await sendMessage(GROUP_ID, templates.success('用户已解除屏蔽', `用户 ${userId} 已解除屏蔽`), threadId ? { message_thread_id: threadId } : {})
         } else if (message.reply_to_message) {
           const replyThreadId = message.reply_to_message.message_thread_id
           if (replyThreadId) {
@@ -589,8 +655,13 @@ ${commands.admin.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
             for (const key of list.keys) {
               const value = await USER_TOPICS.get(key.name)
               if (value === replyThreadId.toString()) {
+                const isBlocked = await USER_BLOCKS.get(KV_KEYS.BLOCK(key.name))
+                if (!isBlocked) {
+                  await sendMessage(GROUP_ID, `用户 ${key.name} 未被屏蔽`, threadId ? { message_thread_id: threadId } : {})
+                  break
+                }
                 await USER_BLOCKS.delete(KV_KEYS.BLOCK(key.name))
-                await sendMessage(GROUP_ID, `用户 ${key.name} 已解除屏蔽`, threadId ? { message_thread_id: threadId } : {})
+                await sendMessage(GROUP_ID, templates.success('用户已解除屏蔽', `用户 ${key.name} 已解除屏蔽`), threadId ? { message_thread_id: threadId } : {})
                 break
               }
             }
@@ -669,7 +740,7 @@ ${commands.admin.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
           }
         }
         
-        await sendMessage(message.chat.id, `清理完成，共删除 ${cleanCount} 个无效话题`, threadId ? { message_thread_id: threadId } : {})
+        await sendMessage(message.chat.id, templates.success('清理完成', `共删除 ${cleanCount} 个无效话题`), threadId ? { message_thread_id: threadId } : {})
         break
 
       case '/broadcast':
@@ -682,6 +753,7 @@ ${commands.admin.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
         const usersList = await USER_TOPICS.list()
         let successCount = 0
         let failCount = 0
+        let blockedCount = 0
         
         for (const key of usersList.keys) {
           const isBlocked = await USER_BLOCKS.get(KV_KEYS.BLOCK(key.name))
@@ -696,10 +768,12 @@ ${commands.admin.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
             } catch (error) {
               failCount++
             }
+          } else {
+            blockedCount++
           }
         }
         
-        await sendMessage(message.chat.id, `广播完成\n成功: ${successCount}\n失败: ${failCount}`, threadId ? { message_thread_id: threadId } : {})
+        await sendMessage(message.chat.id, templates.success('广播完成', `成功: ${successCount}\n失败: ${failCount}\n已屏蔽: ${blockedCount}`), threadId ? { message_thread_id: threadId } : {})
         break
 
       case '/status':
@@ -724,7 +798,7 @@ ${commands.admin.map(cmd => `/${cmd.command} - ${cmd.description}`).join('\n')}
     }
   } catch (error) {
     console.error('Admin command error:', error)
-    await sendMessage(GROUP_ID, `命令执行失败: ${error.message}`, threadId ? { message_thread_id: threadId } : {})
+    await sendMessage(GROUP_ID, templates.error('命令执行失败', error.message), threadId ? { message_thread_id: threadId } : {})
   }
 }
 
