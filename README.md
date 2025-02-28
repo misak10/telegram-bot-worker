@@ -71,10 +71,6 @@
 - Webhook 密钥建议设置，以增加安全性
 - 确保 KV 命名空间正确创建并绑定
 
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
 ## 支持
 
 如果遇到问题，可以：
@@ -86,3 +82,8 @@
 如果您觉得这个项目对您有帮助，欢迎通过以下方式支持我们：
 
 [![爱发电](https://img.shields.io/badge/爱发电-支持我们-946ce6?style=for-the-badge)](https://afdian.com/a/misak10)
+
+## 感谢
+
+[NFD](https://github.com/LloydAsp/nfd)
+[telegram-bot-cloudflare](https://github.com/cvzi/telegram-bot-cloudflare)
