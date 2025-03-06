@@ -29,7 +29,7 @@
 3. 在 Worker 设置中绑定上述两个 KV 命名空间:
    - 变量名: `USER_TOPICS`, 命名空间: 选择 `USER_TOPICS`
    - 变量名: `USER_BLOCKS`, 命名空间: 选择 `USER_BLOCKS`
-4. 将 `worker.js` 的内容复制到 Worker 编辑器中
+4. 将 [worker.js](https://raw.githubusercontent.com/misak10/telegram-bot-worker/refs/heads/main/src/worker.js) 的内容复制到 Worker 编辑器中
 5. 在 Worker 设置中添加以下环境变量：
    - `ENV_BOT_TOKEN`: Telegram 机器人的 token
    - `ENV_BOT_SECRET`: Webhook 的密钥（可选但建议设置）
