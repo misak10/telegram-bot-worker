@@ -22,7 +22,7 @@
 
 ## 部署方法
 
-1. 在 Cloudflare Workers 中创建新的 Worker
+1. 在 [Cloudflare](https://www.cloudflare.com) Workers 中创建新的 Worker
 2. 创建两个 KV 命名空间:
    - `USER_TOPICS`: 存储用户话题关联
    - `USER_BLOCKS`: 存储用户屏蔽状态
